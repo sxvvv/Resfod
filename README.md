@@ -5,24 +5,6 @@
 
 **ResFoD** is a novel compositional flow matching framework for image restoration that decomposes complex combined degradations into atomic factors. This repository contains the core implementation of the Traj-CFM (Trajectory-aware Compositional Flow Matching) model.
 
-## 🎯 Key Features
-
-- **Compositional Decomposition**: Models combined degradations as compositions of atomic factors (low-light, haze, rain, snow)
-- **Forward-Only Diffusion**: Single-forward diffusion process optimized for restoration tasks
-- **Parameter-Efficient Design**: Shared backbone network with lightweight expert adapters
-- **Time-Conditioned Gating**: Physics-informed gating mechanism that emphasizes different experts at different time stages
-- **One-Step Inference**: Direct prediction mode for fast and efficient inference
-
-## 📋 Table of Contents
-
-- [Installation](#installation)
-- [Model Architecture](#model-architecture)
-- [Core Components](#core-components)
-- [Usage](#usage)
-- [Methodology](#methodology)
-- [Citation](#citation)
-- [License](#license)
-
 ## 🔧 Installation
 
 ### Requirements
