@@ -1,6 +1,4 @@
 # utils/fod_core.py
-# Flow of Diffusion (FoD) 核心算法实现
-# 基于更严格的数学实现（整合用户提供的实现）
 
 import math
 import numpy as np
@@ -311,9 +309,7 @@ class FoDiffusion:
 
 class FoDSchedule:
     """
-    Flow of Diffusion Schedule（向后兼容接口）。
-    
-    内部使用FoDiffusion实现，但保持原有API以兼容现有代码。
+    Flow of Diffusion Schedule
     """
     
     def __init__(self, T=100, delta=0.001, device="cuda", 
@@ -350,7 +346,6 @@ class FoDSchedule:
         elif prediction == "sflow":
             model_type = ModelType.SFLOW
         else:
-            # ✅修复：回退到SFLOW而不是FLOW，确保训练-推理一致
             print(f"Warning: Unknown prediction type '{prediction}', using 'sflow'")
             model_type = ModelType.SFLOW
         
@@ -391,19 +386,12 @@ def fod_analytic_sample(x0, mu, t0, t1, schedule, epsilon):
     B = x0.shape[0]
     device = x0.device
     
-    # 将归一化时间[0,1]转换为整数索引[0, T]
-    # 注意：t0通常为0，t1是随机采样的时间
     t0_idx = (t0 * schedule.T).long().clamp(0, schedule.T)
     t1_idx = (t1 * schedule.T).long().clamp(0, schedule.T)
     
-    # 使用expo_normal_cumsum（更严格的数学实现）
-    # expo_normal_cumsum(t) 计算从0到t的累积指数正态分布
     fod = schedule._fod
     expo = fod.expo_normal_cumsum(t1_idx, epsilon)
     
-    # 路径：xt = (x0 - mu) * expo + mu
-    # 这等价于：xt = x0 * expo + mu * (1 - expo)
-    # 当t=0时，expo=1，xt=x0；当t足够大时，expo接近0，xt接近mu
     xt = (x0 - mu) * expo + mu
     
     return xt
@@ -448,13 +436,9 @@ def fod_nmc_step(
     B = xt.shape[0]
     device = xt.device
     
-    # 将归一化时间转换为整数索引
     t_idx = (t * schedule.T).long().clamp(0, schedule.T)
     t_next_idx = ((t + dt) * schedule.T).long().clamp(0, schedule.T)
     
-    # 创建模型包装函数（适配FoDiffusion接口）
-    # FoDiffusion期望: model(x, t_int, x_start, **kwargs)
-    # 我们的模型期望: model(x_t, y, t_norm, deg_name=..., w=..., m=...)
     def model_wrapper(x, t_int, x_start, **kwargs):
         # 将整数索引转换回归一化时间
         t_norm = t_int.float() / schedule.T
@@ -537,7 +521,7 @@ def fod_nmc_sample(
         model=model_wrapper,
         x_start=y,
         num_steps=n_steps,
-        sample_type="MC",  # ✅修复：使用MC而不是NMC，确保多步采样正确（transition而不是cumsum）
+        sample_type="MC",  
         clip_denoised=True,
         model_kwargs={},
         device=device,
@@ -553,8 +537,6 @@ def fod_nmc_sample(
 
 def fod_simple_sample(model, y, n_steps=50, schedule=None, w=None, m=None, deg_name=None):
     """
-    简化版采样：使用正确的FoD更新逻辑
-    
     核心更新公式：x_{t+1} = (x_t - x_final) * decay + x_final
     其中 x_final = x_t + r_pred (SFLOW)
     
@@ -582,26 +564,11 @@ def fod_simple_sample(model, y, n_steps=50, schedule=None, w=None, m=None, deg_n
         t_norm = torch.full((B,), step / n_steps, device=device)
         
         with torch.no_grad():
-            # 模型预测残差 r = x - xt (SFLOW)
             r_pred = model(xt, y, t_norm, deg_name=deg_name, w=w, m=m)
         
-        # SFLOW: x_final = xt + r_pred
         x_final = xt + r_pred
         x_final = x_final.clamp(-1, 1)
         
-        # ✅修复：使用正确的FoD更新
-        # x_{t+1} = (x_t - x_final) * decay + x_final
-        # decay 随着 step 增加而减小
-        t_next = (step + 1) / n_steps
-        
-        # ⚠️ 修复：调整衰减因子，使其更温和
-        # 原来的 exp(-3.0 * t_next) 衰减太快，导致过早收敛
-        # 使用更温和的衰减：exp(-1.5 * t_next)，在t=1时衰减到约0.22
-        # 或者使用线性衰减：(1 - t_next) 更简单直观
-        # 这里使用指数衰减但更温和
-        decay = math.exp(-1.5 * t_next)  # 衰减到约0.22在t=1，更温和
-        
-        # 添加少量噪声（可选，增加随机性）
         if step < n_steps - 1:
             noise = torch.randn_like(xt) * 0.01 * (1.0 - t_next)  # 噪声随t减小
         else:
