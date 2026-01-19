@@ -114,7 +114,6 @@ class ExpertVelocityField(nn.Module):
         # 时间嵌入Adapter
         self.time_adapter = AdapterLayer(emb_dim, adapter_dim)
         
-        # ✅改进：空间特征Adapter适配base_ch（full-res feature）
         # 使用1x1卷积作为轻量Adapter
         self.spatial_adapter = nn.Sequential(
             nn.Conv2d(base_ch, base_ch, 1),
@@ -334,7 +333,6 @@ class TrajCFMNet(nn.Module):
             for _ in range(4)
         ])
         
-        # ✅改进：专家输出投影（将adapted特征映射回速度场）
         # 使用base_ch（full-res feature）而不是final_ch
         self.expert_outputs = nn.ModuleList([
             nn.Sequential(
@@ -436,12 +434,10 @@ class TrajCFMNet(nn.Module):
         # 构建 alpha MLP 输入
         alpha_input = torch.cat([temb, w_norm, m_mean], dim=1)
         alpha_logits = self.alpha_mlp(alpha_input)
-        # ✅修复：使用sigmoid（多专家可同时激活）+ sum-normalize（与target对齐）
         alpha = torch.sigmoid(alpha_logits)  # (B,4) in [0,1]
         # 用w>阈值作为存在mask
         w_mask = (w > 0.1).float()  # (B, 4) 存在mask
         alpha = alpha * w_mask  # mask掉不存在的因子
-        # ✅修复：sum-normalize（与gating_target_from_labels的sum=1对齐）
         alpha = alpha / (alpha.sum(dim=1, keepdim=True) + 1e-8)
         
         # 应用每个专家的Adapter并组合
@@ -449,7 +445,6 @@ class TrajCFMNet(nn.Module):
         r_experts = []  # 用于 return_aux，存储原始专家 residual（未乘 alpha 和 m）
         
         for i, expert in enumerate(self.experts):
-            # ✅改进：应用Adapter到full-res feature
             adapted_feature, adapted_temb = expert.apply_adapters(h_final, temb)
             
             # 使用adapted特征生成速度场（这是 residual/residual field）
