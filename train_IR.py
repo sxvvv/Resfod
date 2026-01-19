@@ -64,7 +64,7 @@ def save_checkpoint(model, ema, opt, scheduler, step, path, args):
     """保存checkpoint"""
     checkpoint = {
         "model": model.module.state_dict() if hasattr(model, 'module') else model.state_dict(),
-        "ema": ema.state_dict(),  # ✅修复：保存完整state_dict（兼容旧格式）
+        "ema": ema.state_dict(),  
         "opt": opt.state_dict(),
         "scheduler": scheduler.state_dict() if scheduler else None,
         "step": step,
@@ -80,13 +80,10 @@ def load_checkpoint(model, ema, opt, scheduler, rank, path):
     model_state = checkpoint["model"]
     
     if hasattr(model, 'module'):
-        # 检查checkpoint的key是否有module前缀
         first_key = list(model_state.keys())[0] if model_state else ""
         if not first_key.startswith("module."):
-            # checkpoint没有module前缀，但当前model是DDP，需要添加
             model_state = {f"module.{k}": v for k, v in model_state.items()}
     
-    # 加载模型权重（允许部分匹配，因为可能有架构变化）
     model.load_state_dict(model_state, strict=False)
     
     ema.load_state_dict(checkpoint["ema"], device=f"cuda:{rank}")
@@ -217,7 +214,6 @@ def evaluate_model(model, test_loader, device, schedule, nmc_steps=50, ema=None,
                     deg_name=deg_one
                 )
             else:
-                # ========== 原始NMC采样 ==========
                 t_init = torch.zeros(B, device=device)
                 
                 if hasattr(model, 'module') and hasattr(model.module, 'parser') and model.module.parser is not None:
@@ -349,12 +345,9 @@ def main():
                         help="困难样本权重因子（困难样本权重 = 基础权重 * factor）")
     
     args = parser.parse_args()
-    
-    # ========== 调试模式：禁用复杂组件 ==========
-    DEBUG_SIMPLE_MODE = False  # 设为True进行简化训练，False使用完整训练配置
+    DEBUG_SIMPLE_MODE = False 
     
     if DEBUG_SIMPLE_MODE:
-        # 在创建logger之前，先打印到控制台
         print("!!! DEBUG MODE: Disabling complex components !!!")
         args.lambda_cls = 0.0      # 禁用分类损失
         args.lambda_alpha = 0.0    # 禁用alpha监督
@@ -374,11 +367,9 @@ def main():
         world_size = 1
         local_rank = 0
     
-    # 只有在world_size>1或明确有torchrun环境变量时才init
     if world_size > 1 or "RANK" in os.environ:
         dist.init_process_group("nccl")
     else:
-        # 单卡且非torchrun模式，给出友好提示
         if rank == 0:
             print("Warning: Single GPU mode without torchrun. Please use torchrun for proper initialization.")
             print("Example: torchrun --nnodes=1 --nproc_per_node=1 --master_port=34567 train_IR.py ...")
@@ -440,7 +431,6 @@ def main():
             use_time_dependent=True,
         ).to(device)
     
-    # EMA模型（在DDP之前创建，使用原始model）
     ema = EMA(model, decay=args.ema_decay)
     
     # DDP
@@ -451,7 +441,7 @@ def main():
         T=args.T, 
         delta=args.delta, 
         device=device,
-        prediction="sflow",  # 显式指定，确保与训练目标一致
+        prediction="sflow",  
     )
     
     if rank == 0:
@@ -485,7 +475,7 @@ def main():
     dataset = LMDBAllWeatherDataset(
         lmdb_path=train_lmdb_path,
         patch_size=args.patch_size,
-        is_train=True,  # 即使是测试集，也需要is_train=True来启用数据增强
+        is_train=True, 
         use_precomputed_depth=args.use_depth,
         use_counterfactual_supervision=False,
         depth_extractor=None,
@@ -762,17 +752,14 @@ def main():
                     with torch.no_grad():
                         psnr_per_sample = psnr_y_torch(x_pred.detach(), x, data_range=2.0, per_sample=True)  # (B,)
                         
-                        # 计算困难样本权重：PSNR < threshold的样本给予更高权重
+                        # 计算困难样本权重
                         hard_mask = psnr_per_sample < args.hard_sample_psnr_threshold  # (B,)
                         sample_weights = torch.ones(B, device=device)
                         sample_weights[hard_mask] = args.hard_sample_weight_factor
-                        # 归一化权重（保持总权重不变）
                         sample_weights = sample_weights / sample_weights.mean()
                     
-                    # 加权平均损失（sample_weights在no_grad外使用，但不参与梯度计算）
                     loss_sfm = (loss_sfm_per_sample * sample_weights.detach()).mean()
                 else:
-                    # 使用破坏权重图加权损失
                     loss_sfm_l1 = ((r_pred - r_target).abs() * w_map).mean()
                     loss_sfm = loss_sfm_l1  # 使用加权L1损失
                 
