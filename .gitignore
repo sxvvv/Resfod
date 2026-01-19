@@ -1,0 +1,63 @@
+# Results and checkpoints
+results/
+*.pt
+*.pth
+*.ckpt
+*.pkl
+
+# Training scripts and configs
+train_IR.py
+train.sh
+train_*.sh
+convert_allweather_to_lmdb.py
+
+# Inference scripts
+inference.py
+run_inference.sh
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Environment
+venv/
+env/
+ENV/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+*.log.*
+
+# Data
+*.lmdb/
+data/
+datasets/
+*.jpg
+*.png
+*.jpeg
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.bak
+*.cache
+
+# Jupyter notebooks
+.ipynb_checkpoints/
+
+# PDF and documentation drafts
+*.pdf
