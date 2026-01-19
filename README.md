@@ -111,48 +111,6 @@ x_hat = fod_nmc_sample(
 )
 ```
 
-## 📖 Methodology
-
-### Forward-Only Diffusion (FoD)
-
-Unlike traditional diffusion models that require forward-backward processes, FoD uses a single-forward process optimized for restoration:
-
-$$\frac{dx_t}{dt} = v_\theta(x_t, t, y)$$
-
-where:
-- $x_0 = y$ (initial state = degraded input)
-- $x_1 = x$ (target state = clean image)
-- $t \in [0,1]$ (normalized time)
-
-### Time-Conditioned Gating
-
-The gating mechanism uses physics-informed priors:
-
-- **Early stage** ($t < 0.33$): Emphasize rain/snow experts (high-frequency noise removal)
-- **Mid stage** ($0.33 \leq t < 0.67$): Emphasize haze expert (mid-frequency dehazing)
-- **Late stage** ($t \geq 0.67$): Emphasize low-light expert (global enhancement)
-
-### Training Strategy
-
-The model is trained using:
-- **SFM (Straight Flow Matching)**: Main training objective
-- **Classification Loss**: Supervises degradation parser
-- **Alpha Supervision**: Guides gating mechanism with physics priors
-
-## 🔬 Technical Details
-
-### Compositional Decomposition
-
-- **Atomic Factors**: 4 factors (low-light, haze, rain, snow)
-- **Compositional Property**: Can handle unseen combinations by composing atomic experts
-- **Parameter Efficiency**: ~18.8M parameters with shared backbone + lightweight adapters
-
-### Expert Design
-
-- **Shared Backbone**: Full U-Net (base_ch=64, ch_mult=[1,2,4,4])
-- **Expert Adapters**: Lightweight (time MLP + 1×1 conv + output projection)
-- **Spatial Modulation**: Expert outputs modulated by spatial intensity maps $m_i$
-
 ## 📄 License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
