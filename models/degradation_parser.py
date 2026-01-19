@@ -1,6 +1,5 @@
 # models/degradation_parser.py
 # 退化解析器：从输入图像估计全局权重w和空间强度图m_i
-# 支持 time-dependent composition 和分类监督
 
 import torch
 import torch.nn as nn
@@ -123,7 +122,6 @@ class DegradationParser(nn.Module):
         logits = self.cls_mlp(h_global)  # (B, 4)
         
         # 全局权重（time-dependent 或 static）
-        # ✅修复：使用sigmoid而不是softmax，支持多因子同时存在
         if self.use_time_dependent and t is not None:
             # Time-dependent composition
             h_feat = self.global_mlp(h_global)  # (B, emb_dim)
@@ -146,18 +144,16 @@ class DegradationParser(nn.Module):
             
             # w_i(t) = σ(a_i + b_i * τ(t))，每个因子独立强度
             w_logits = a + b * tau  # (B, 4)
-            w = torch.sigmoid(w_logits)  # ✅ 改为sigmoid，支持多因子叠加
+            w = torch.sigmoid(w_logits)  
         else:
             # Static composition（只看 y，不看 t）
             w_logits = self.global_mlp(h_global)  # (B, 4)
-            w = torch.sigmoid(w_logits)  # ✅ 改为sigmoid
+            w = torch.sigmoid(w_logits)  
         
         # 空间强度图
-        # ✅修复：使用sigmoid而不是softmax，支持多因子同时存在
         m_logits = self.spatial_conv(h)  # (B, 4, H, W)
-        m = torch.sigmoid(m_logits)  # ✅ 改为sigmoid，每个因子独立强度
+        m = torch.sigmoid(m_logits)  
         
-        # ✅修复：用present mask限制m和w（如果提供了present）
         if present is not None:
             # w: 只保留存在的因子
             w = w * present
