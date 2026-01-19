@@ -1,5 +1,4 @@
 # utils/lmdb_dataset.py
-# LMDB 数据集加载器（支持 CDD-11 和通用图像恢复数据集）
 
 import os
 import pickle
@@ -77,7 +76,6 @@ class LMDBAllWeatherDataset(Dataset):
         
         print(f"Loaded LMDB dataset: {len(self.keys)} samples from {lmdb_path}")
         
-        # ✅建立索引表：用于查找同一 scene 的不同退化组合（用于反事实监督）
         if self.use_counterfactual_supervision:
             self.key_map = {}  # (scene_id, deg_name) -> key
             self.gt_key_map = {}  # scene_id -> key (for clean/GT)
@@ -222,7 +220,7 @@ class LMDBAllWeatherDataset(Dataset):
         y = self.to_tensor(lq_img) * 2.0 - 1.0
         x = self.to_tensor(gt_img) * 2.0 - 1.0
         
-        # ✅确保尺寸一致
+
         if y.shape != x.shape:
             min_h = min(y.shape[1], x.shape[1])
             min_w = min(y.shape[2], x.shape[2])
@@ -231,7 +229,7 @@ class LMDBAllWeatherDataset(Dataset):
         
         C, H, W = y.shape
         
-        # ✅解析因子并构建 present/w/m
+
         factors = parse_factors(deg_name)
         present = factors_to_present(factors)
         w = present.clone()  # 最小版本：w = present
@@ -242,7 +240,6 @@ class LMDBAllWeatherDataset(Dataset):
             if present[i] > 0:
                 m[i].fill_(1.0)
         
-        # ✅构建 y_minus 和 has_cf
         y_minus = torch.zeros(4, C, H, W)  # [4,3,H,W]
         has_cf = torch.zeros(4)  # [4]
         
@@ -394,23 +391,12 @@ class LMDBAllWeatherDataset(Dataset):
             lq_img = TF.vflip(lq_img)
             gt_img = TF.vflip(gt_img)
         
-        # ✅移除随机旋转，避免90/270度旋转导致的宽高互换问题
-        # 如果需要旋转，可以使用180度旋转（不会改变宽高）
-        # if random.random() > 0.5:
-        #     angle = 180  # 只使用180度旋转，避免宽高互换
-        #     lq_img = TF.rotate(lq_img, angle)
-        #     gt_img = TF.rotate(gt_img, angle)
-        
         return lq_img, gt_img
     
     def __del__(self):
-        """关闭 LMDB 连接"""
         if hasattr(self, 'env'):
             self.env.close()
 
-
-# 如果 LMDB 不可用，可以尝试使用 ImageFolderDataset
-# 但训练脚本默认使用 LMDBAllWeatherDataset
 try:
     import lmdb
     LMDB_AVAILABLE = True
